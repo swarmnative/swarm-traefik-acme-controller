@@ -24,8 +24,9 @@ RUN set -eux; \
     done; \
   fi
 COPY cmd ./cmd
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags "-s -w" -o /out/controller ./cmd/controller
+RUN go list -m all && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -v -trimpath -ldflags "-s -w" -o /out/controller ./cmd/controller
 
 FROM gcr.io/distroless/static:nonroot
 LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
