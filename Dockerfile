@@ -6,7 +6,6 @@ FROM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates build-base && update-ca-certificates
 COPY go.mod ./
-COPY go.sum ./
 # Online deps with proxy fallback (no vendor)
 RUN set -eux; \
   for p in https://proxy.golang.org https://goproxy.cn https://goproxy.io; do \
