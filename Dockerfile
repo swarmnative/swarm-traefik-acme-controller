@@ -5,8 +5,10 @@ ARG TARGETARCH
 FROM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates build-base && update-ca-certificates
+ENV GOPROXY=https://proxy.golang.org,direct \
+    GOSUMDB=sum.golang.org
 COPY go.mod ./
-RUN go mod download
+RUN go mod download -x
 COPY cmd ./cmd
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags "-s -w" -o /out/controller ./cmd/controller
