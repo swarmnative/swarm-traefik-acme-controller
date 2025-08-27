@@ -2,6 +2,10 @@ package main
 
 import (
     "context"
+    "crypto/ecdsa"
+    "crypto/elliptic"
+    "crypto/rand"
+    "crypto/rsa"
     "crypto/sha256"
     "crypto/x509"
     "encoding/hex"
@@ -10,6 +14,7 @@ import (
     "log"
     "os"
     "path/filepath"
+    "sort"
     "strings"
     "time"
 
@@ -17,7 +22,6 @@ import (
     "github.com/docker/docker/api/types/filters"
     swm "github.com/docker/docker/api/types/swarm"
     docker "github.com/docker/docker/client"
-    "github.com/go-acme/lego/v4/certcrypto"
     "github.com/go-acme/lego/v4/certificate"
     "github.com/go-acme/lego/v4/challenge/dns01"
     "github.com/go-acme/lego/v4/lego"
@@ -216,14 +220,12 @@ func obtainOrRenew(email, provider, keySet, acmeServer, eabKid, eabHmac string, 
     prov, err := dns01.NewDNSProviderByName(provider)
     if err != nil { return nil, nil, err }
     if err := client.Challenge.SetDNS01Provider(prov); err != nil { return nil, nil, err }
-    var reg *registration.Resource
     var err error
     if eabKid != "" && eabHmac != "" {
-        reg, err = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{KID: eabKid, HmacEncoded: eabHmac, TermsOfServiceAgreed: true})
+        if _, err = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{Kid: eabKid, HMAC: eabHmac, TermsOfServiceAgreed: true}); err != nil { return nil, nil, err }
     } else {
-        reg, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+        if _, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true}); err != nil { return nil, nil, err }
     }
-    if err != nil { return nil, nil, err }
     u.reg = reg
     // Obtain
     req := certificate.ObtainRequest{Domains: domains, Bundle: true}
@@ -232,20 +234,16 @@ func obtainOrRenew(email, provider, keySet, acmeServer, eabKid, eabHmac string, 
     return res.Certificate, res.PrivateKey, nil
 }
 
-type legoUser struct {
-    email string
-    key   certcrypto.PrivateKey
-    reg   *registration.Resource
-}
+type legoUser struct { email string; key interface{} }
 func (u *legoUser) GetEmail() string                        { return u.email }
-func (u *legoUser) GetRegistration() *registration.Resource { return u.reg }
-func (u *legoUser) GetPrivateKey() certcrypto.PrivateKey    { return u.key }
+func (u *legoUser) GetRegistration() *registration.Resource { return nil }
+func (u *legoUser) GetPrivateKey() interface{}              { return u.key }
 func (u *legoUser) generateKey(keySet string) {
     switch keySet {
-    case "rsa2048": u.key = certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
-    case "rsa4096": u.key = certcrypto.GeneratePrivateKey(certcrypto.RSA4096)
-    case "ec384": u.key = certcrypto.GeneratePrivateKey(certcrypto.EC384)
-    default: u.key = certcrypto.GeneratePrivateKey(certcrypto.EC256)
+    case "rsa2048": k, _ := rsa.GenerateKey(rand.Reader, 2048); u.key = k
+    case "rsa4096": k, _ := rsa.GenerateKey(rand.Reader, 4096); u.key = k
+    case "ec384": u.key, _ = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+    default: u.key, _ = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
     }
 }
 
