@@ -1,4 +1,6 @@
 ARG GO_VERSION=1.22
+ARG TARGETOS=linux
+ARG TARGETARCH
 
 FROM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src
@@ -6,7 +8,7 @@ RUN apk add --no-cache git ca-certificates && update-ca-certificates
 COPY go.mod ./
 RUN go mod download
 COPY cmd ./cmd
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$(apk --print-arch | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags "-s -w" -o /out/controller ./cmd/controller
 
 FROM gcr.io/distroless/static:nonroot
