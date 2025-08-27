@@ -23,7 +23,7 @@ import (
     swm "github.com/docker/docker/api/types/swarm"
     docker "github.com/docker/docker/client"
     "github.com/go-acme/lego/v4/certificate"
-    "github.com/go-acme/lego/v4/challenge/dns01"
+    dnsprov "github.com/go-acme/lego/v4/providers/dns"
     "github.com/go-acme/lego/v4/lego"
     "github.com/go-acme/lego/v4/registration"
 )
@@ -207,26 +207,20 @@ func obtainOrRenew(email, provider, keySet, acmeServer, eabKid, eabHmac string, 
     u := &legoUser{email: email}
     u.generateKey(keySet)
     cfg := lego.NewConfig(u)
-    switch keySet {
-    case "ec384": cfg.Certificate.KeyType = certcrypto.EC384
-    case "rsa2048": cfg.Certificate.KeyType = certcrypto.RSA2048
-    case "rsa4096": cfg.Certificate.KeyType = certcrypto.RSA4096
-    default: cfg.Certificate.KeyType = certcrypto.EC256
-    }
     if acmeServer != "" { cfg.CADirURL = acmeServer }
     client, err := lego.NewClient(cfg)
     if err != nil { return nil, nil, err }
     // DNS provider via env
-    prov, err := dns01.NewDNSProviderByName(provider)
+    prov, err := dnsprov.NewDNSChallengeProviderByName(provider)
     if err != nil { return nil, nil, err }
     if err := client.Challenge.SetDNS01Provider(prov); err != nil { return nil, nil, err }
-    var err error
     if eabKid != "" && eabHmac != "" {
-        if _, err = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{Kid: eabKid, HMAC: eabHmac, TermsOfServiceAgreed: true}); err != nil { return nil, nil, err }
+        if _, err = client.Registration.RegisterWithExternalAccountBinding(
+            registration.RegisterEABOptions{Kid: eabKid, HmacEncoded: eabHmac, TermsOfServiceAgreed: true},
+        ); err != nil { return nil, nil, err }
     } else {
         if _, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true}); err != nil { return nil, nil, err }
     }
-    u.reg = reg
     // Obtain
     req := certificate.ObtainRequest{Domains: domains, Bundle: true}
     res, err := client.Certificate.Obtain(req)
