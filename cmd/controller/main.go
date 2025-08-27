@@ -80,7 +80,7 @@ func main() {
 
     for {
         ctx := context.Background()
-        svcs, err := cli.ServiceList(ctx, swm.ServiceListOptions{Filters: buildLabelFilter(labels)})
+        svcs, err := cli.ServiceList(ctx, types.ServiceListOptions{Filters: buildLabelFilter(labels)})
         if err != nil { log.Println("service list:", err) } else {
             if len(svcs) == 0 { log.Println("no traefik service matched labels:", labels) }
             for _, s := range svcs {
@@ -228,10 +228,10 @@ func obtainOrRenew(email, provider, keySet, acmeServer, eabKid, eabHmac string, 
     return res.Certificate, res.PrivateKey, nil
 }
 
-type legoUser struct { email string; key interface{} }
+type legoUser struct { email string; key crypto.PrivateKey }
 func (u *legoUser) GetEmail() string                        { return u.email }
 func (u *legoUser) GetRegistration() *registration.Resource { return nil }
-func (u *legoUser) GetPrivateKey() interface{}              { return u.key }
+func (u *legoUser) GetPrivateKey() crypto.PrivateKey        { return u.key }
 func (u *legoUser) generateKey(keySet string) {
     switch keySet {
     case "rsa2048": k, _ := rsa.GenerateKey(rand.Reader, 2048); u.key = k
@@ -260,7 +260,7 @@ func createOrReplaceSecret(ctx context.Context, cli *docker.Client, name string,
     if err == nil && len(lst) > 0 {
         _ = cli.SecretRemove(ctx, lst[0].ID)
     }
-    id, err := cli.SecretCreate(ctx, swm.SecretSpec{Name: name, Data: data})
+    id, err := cli.SecretCreate(ctx, swm.SecretSpec{Annotations: swm.Annotations{Name: name}, Data: data})
     if err != nil { return "", err }
     return id.ID, nil
 }
@@ -268,7 +268,7 @@ func createOrReplaceSecret(ctx context.Context, cli *docker.Client, name string,
 func createOrReplaceConfig(ctx context.Context, cli *docker.Client, name string, data []byte) (string, error) {
     lst, err := cli.ConfigList(ctx, types.ConfigListOptions{Filters: filters.NewArgs(filters.Arg("name", name))})
     if err == nil && len(lst) > 0 { _ = cli.ConfigRemove(ctx, lst[0].ID) }
-    id, err := cli.ConfigCreate(ctx, swm.ConfigSpec{Name: name, Data: data})
+    id, err := cli.ConfigCreate(ctx, swm.ConfigSpec{Annotations: swm.Annotations{Name: name}, Data: data})
     if err != nil { return "", err }
     return id.ID, nil
 }
@@ -304,8 +304,7 @@ func updateServiceSecretsAndConfigs(ctx context.Context, cli *docker.Client, svc
 
     // Ensure start-first
     if spec.UpdateConfig == nil { spec.UpdateConfig = &swm.UpdateConfig{} }
-    order := swm.UpdateOrderStartFirst
-    spec.UpdateConfig.Order = &order
+    spec.UpdateConfig.Order = swm.UpdateOrderStartFirst
     spec.TaskTemplate.ContainerSpec = cs
     // bump force update
     spec.TaskTemplate.ForceUpdate++
