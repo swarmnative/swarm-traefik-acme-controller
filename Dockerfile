@@ -4,7 +4,7 @@ ARG TARGETARCH
 
 FROM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src
-RUN apk add --no-cache git ca-certificates && update-ca-certificates
+RUN apk add --no-cache git ca-certificates build-base && update-ca-certificates
 COPY go.mod ./
 RUN go mod download
 COPY cmd ./cmd
