@@ -7,11 +7,21 @@ WORKDIR /src
 RUN apk add --no-cache git ca-certificates build-base && update-ca-certificates
 ENV GOSUMDB=sum.golang.org
 COPY go.mod ./
-RUN set -e; \
+RUN set -eux; \
+  # First pass: with sumdb ON
   for p in https://proxy.golang.org https://goproxy.cn https://goproxy.io; do \
-    echo "trying GOPROXY=$p"; \
-    go env -w GOPROXY=$p,direct; \
-    go mod download -x && exit 0 || echo "go mod download failed with $p"; \
+    echo "trying GOPROXY=$p (sumdb on)"; \
+    go env -w GOPROXY=$p,direct GOSUMDB=sum.golang.org; \
+    if go mod download -x; then exit 0; fi; \
+    echo "go mod download failed via $p (sumdb on)"; \
+  done; \
+  # Second pass: disable sumdb verification (some networks block sum.golang.org)
+  echo "retry with GOSUMDB=off"; \
+  for p in https://goproxy.cn https://goproxy.io https://proxy.golang.org; do \
+    echo "trying GOPROXY=$p (sumdb off)"; \
+    go env -w GOPROXY=$p,direct GOSUMDB=off; \
+    if go mod download -x; then exit 0; fi; \
+    echo "go mod download failed via $p (sumdb off)"; \
   done; \
   echo "all proxies failed"; exit 1
 COPY cmd ./cmd
